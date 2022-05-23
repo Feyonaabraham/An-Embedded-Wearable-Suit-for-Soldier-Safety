@@ -1,0 +1,236 @@
+
+
+#include <DFRobot_DHT11.h>
+DFRobot_DHT11 DHT;
+#define DHT11_PIN 10
+#include <Wire.h>
+#include "MAX30105.h"
+MAX30105 particleSensor;
+#include <DFRobot_HX711.h>
+DFRobot_HX711 MyScale(2, 3);
+int loadcell;
+
+#include <LiquidCrystal_I2C.h>
+LiquidCrystal_I2C lcd(0x3F,16,2); 
+#include <SoftwareSerial.h>
+#include <TinyGPS++.h>
+const int RXPin = 5, TXPin = 4;
+const uint32_t GPSBaud = 9600; 
+SoftwareSerial gps_module(RXPin, TXPin);
+TinyGPSPlus gps;
+float latitude; 
+float longitude;
+
+float gps_speed;
+float no_of_satellites;
+String satellite_orientation;
+unsigned int move_index = 1; 
+
+int mq_135 = A0;
+int mq_135_val;
+int x = A1;
+int x_val;
+int y = A2;
+int y_val;
+int ecg = A3;
+int ecg_val;
+int mq_2 = 7;
+int mq_2_val;
+
+void setup()
+{
+  Serial.begin(9600);
+  lcd.init();   
+  pinMode(mq_135,INPUT);
+  pinMode(x,INPUT);
+  pinMode(y,INPUT);
+  pinMode(mq_2,INPUT);
+  pinMode(9, INPUT);
+  pinMode(8, INPUT);
+  gps_module.begin(GPSBaud);
+   if (!particleSensor.begin(Wire, I2C_SPEED_FAST)) 
+  {
+    Serial.println("MAX30105 was not found. Please check wiring/power. ");
+    while (1);
+  }
+  byte ledBrightness = 0x1F; //Options: 0=Off to 255=50mA
+  byte sampleAverage = 8; //Options: 1, 2, 4, 8, 16, 32
+  byte ledMode = 3; //Options: 1 = Red only, 2 = Red + IR, 3 = Red + IR + Green
+  int sampleRate = 100; //Options: 50, 100, 200, 400, 800, 1000, 1600, 3200
+  int pulseWidth = 411; //Options: 69, 118, 215, 411
+  int adcRange = 4096; //Options: 2048, 4096, 8192, 16384
+  particleSensor.setup(ledBrightness, sampleAverage, ledMode, sampleRate, pulseWidth, adcRange);
+  const byte avgAmount = 64;
+  long baseValue = 0;
+  for (byte x = 0 ; x < avgAmount ; x++)
+  {
+    baseValue += particleSensor.getIR(); //Read the IR value
+  }
+  baseValue /= avgAmount;
+  for (int x = 0 ; x < 500 ; x++)
+    Serial.println(baseValue);
+}
+
+void checkGPS(){
+  if (gps.charsProcessed() < 10)
+  {
+    Serial.println(F("No GPS detected: check wiring."));
+     
+  }
+}
+
+
+void loop()
+{
+
+  mq_135_val = analogRead(mq_135);
+  x_val = analogRead(x);
+  y_val = analogRead(y);
+  DHT.read(DHT11_PIN);
+  mq_2_val = digitalRead(mq_2);
+  if((digitalRead(8) == 1)||(digitalRead(9) == 1)){
+//    Serial.println('!');
+  }
+  else{
+    // send the value of analog input 0:
+      ecg_val = analogRead(ecg);
+  }
+  loadcell = (MyScale.readWeight(), 1);
+  
+//  Serial.print("M_135:");
+//  Serial.print(mq_135_val);
+//  Serial.print("        ");
+//  Serial.print("X_v:");
+//  Serial.print(x_val);
+//  Serial.print("        ");
+//  Serial.print("Y_v;");
+//  Serial.print(y_val);
+//  Serial.print("        ");
+//  Serial.print("temp:");
+//  Serial.print(DHT.temperature);
+//  Serial.print("        ");
+//  Serial.print("M_2:");
+//  Serial.print(mq_2_val);
+//  Serial.print("        ");
+//  Serial.print("SPO2:");
+//  Serial.print(particleSensor.getIR());
+//  Serial.print("        ");
+//  Serial.print("ECG:");
+//  Serial.print(ecg_val);
+//  Serial.print("        ");
+//  Serial.print("Loadcell:");
+//  Serial.println(loadcell);
+
+  if(Serial.available()>0)
+  {
+    String a = Serial.readStringUntil('\n');
+    lcd.backlight();
+    lcd.setCursor(0,0);
+    lcd.print("Msg:");
+    lcd.print(a);
+    delay(5000);
+    lcd.clear();
+  }
+
+
+
+  
+  
+//  delay(1000);
+
+
+//  Serial.print("M_135:");
+  Serial.println(mq_135_val);
+//  Serial.print("        ");
+//  Serial.print("X_v:");
+  Serial.println(x_val);
+  delay(1000);
+//  Serial.print("        ");
+//  Serial.print("Y_v;");
+  Serial.println(y_val);
+  delay(1000);
+//  Serial.print("        ");
+//  Serial.print("temp:");
+  Serial.println(DHT.temperature);
+  delay(1000);
+//  Serial.print("        ");
+//  Serial.print("M_2:");
+  Serial.println(mq_2_val);
+ delay(1000);
+//  Serial.print("        ");
+//  Serial.print("SPO2:");
+  Serial.println(particleSensor.getIR());
+  delay(1000);
+//  Serial.print("        ");
+//  Serial.print("ECG:");
+  Serial.println(ecg_val);
+  delay(1000);
+//  Serial.print("        ");
+//  Serial.print("Loadcell:");
+  Serial.println(loadcell);
+  delay(1000);
+//  Serial.println("END");
+//  delay(1000);
+
+     while (gps_module.available() > 0) 
+  {
+    //displays information every time a new sentence is correctly encoded.
+    if (gps.encode(gps_module.read()))
+    
+    displayInfo();
+  }
+
+  delay(1000);
+  
+  
+}
+
+
+
+void displayInfo()
+{
+  if (gps.location.isValid()) 
+  {
+    //Storing the Latitude. and Longitude
+     latitude = (gps.location.lat());
+     longitude = (gps.location.lng()); 
+    int b = 11;
+    int b_val;
+    b_val = digitalRead(b);
+    if(b_val == HIGH)
+    {
+    Serial.print("LAT:  ");
+    Serial.println(latitude, 6);  // float to x decimal places
+    Serial.print("LONG: ");
+    Serial.println(longitude, 6);
+    }
+   
+    
+    lcd.backlight();
+    lcd.setCursor (0,0);
+    lcd.print("lat:");
+    lcd.setCursor (7,0);
+    lcd.print(latitude);
+    lcd.setCursor (0,1);
+    lcd.print("long:");
+    lcd.setCursor (7,1);
+    lcd.print(longitude);
+    
+    
+  
+    
+    //get speed
+    gps_speed = gps.speed.kmph();
+  
+       
+    //get number of satellites
+    no_of_satellites = gps.satellites.value();
+    
+
+    // get the satellite orientation/direction
+    satellite_orientation = TinyGPSPlus::cardinal(gps.course.value());
+    
+  }
+  
+  Serial.println();
+}
